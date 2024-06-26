@@ -1,6 +1,8 @@
 #include <windows.h>
+#include <commdlg.h>
 #include "resource.h"
 #include <string>
+#include <vector>
 
 // Link with ComCtl32.lib
 #pragma comment(lib, "ComCtl32.lib")
@@ -16,6 +18,20 @@ INT_PTR CALLBACK NewFileDlgProc(HWND, UINT, WPARAM, LPARAM);
 
 // Global Variables
 HINSTANCE g_hInstance;
+std::vector<HBITMAP> layers;
+HWND hLayerListView;
+
+// Function to add a layer to the list view
+void AddLayer(HWND hWnd, HBITMAP hBitmap) {
+    layers.push_back(hBitmap);
+
+    LVITEM lvItem = { 0 };
+    lvItem.mask = LVIF_TEXT;
+    lvItem.pszText = const_cast<LPWSTR>(L"Layer");
+    lvItem.iItem = ListView_GetItemCount(hLayerListView);
+
+    ListView_InsertItem(hLayerListView, &lvItem);
+}
 
 // The main function for a Windows application
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
@@ -136,9 +152,26 @@ LRESULT CALLBACK PhotoEditorWndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
             HMENU hMenu = CreateMenu();
 
             AppendMenu(hMenu, MF_STRING, ID_MENU_FILE_NEW, L"New File");
+            AppendMenu(hMenu, MF_STRING, IDM_FILE_IMPORT, L"Import");
             AppendMenu(hMenubar, MF_POPUP, (UINT_PTR)hMenu, L"File");
 
             SetMenu(hWnd, hMenubar);
+
+            // Create a list view for layers
+            hLayerListView = CreateWindow(WC_LISTVIEW, 
+                NULL, 
+                WS_CHILD | WS_VISIBLE | LVS_REPORT, 
+                600, 0, 200, 600, 
+                hWnd, 
+                NULL, 
+                g_hInstance, 
+                NULL);
+
+            LVCOLUMN lvColumn;
+            lvColumn.mask = LVCF_TEXT | LVCF_WIDTH;
+            lvColumn.pszText = const_cast<LPWSTR>(L"Layers");
+            lvColumn.cx = 200;
+            ListView_InsertColumn(hLayerListView, 0, &lvColumn);
         }
         break;
 
@@ -146,9 +179,59 @@ LRESULT CALLBACK PhotoEditorWndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
         if (LOWORD(wParam) == ID_MENU_FILE_NEW) {
             DialogBox(g_hInstance, MAKEINTRESOURCE(IDD_NEWFILE), hWnd, NewFileDlgProc);
         }
+        else if (LOWORD(wParam) == IDM_FILE_IMPORT) {
+            OPENFILENAME ofn;
+            wchar_t szFile[260];
+
+            ZeroMemory(&ofn, sizeof(ofn));
+            ofn.lStructSize = sizeof(ofn);
+            ofn.hwndOwner = hWnd;
+            ofn.lpstrFile = szFile;
+            ofn.lpstrFile[0] = '\0';
+            ofn.nMaxFile = sizeof(szFile);
+            ofn.lpstrFilter = L"All\0*.*\0Image Files\0*.BMP;*.JPG;*.GIF;*.PNG\0";
+            ofn.nFilterIndex = 1;
+            ofn.lpstrFileTitle = NULL;
+            ofn.nMaxFileTitle = 0;
+            ofn.lpstrInitialDir = NULL;
+            ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+            if (GetOpenFileName(&ofn) == TRUE) {
+                HBITMAP hBitmap = (HBITMAP) LoadImage(NULL, ofn.lpstrFile, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+                if (hBitmap != NULL) {
+                    AddLayer(hWnd, hBitmap);
+                }
+            }
+        }
+        break;
+
+    case WM_PAINT:
+        {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hWnd, &ps);
+
+            // Draw the layers in the correct order
+            for (HBITMAP hBitmap : layers) {
+                HDC hdcMem = CreateCompatibleDC(hdc);
+                HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, hBitmap);
+
+                BITMAP bm;
+                GetObject(hBitmap, sizeof(bm), &bm);
+
+                BitBlt(hdc, 0, 0, bm.bmWidth, bm.bmHeight, hdcMem, 0, 0, SRCCOPY);
+                SelectObject(hdcMem, hbmOld);
+                DeleteDC(hdcMem);
+            }
+
+            EndPaint(hWnd, &ps);
+        }
         break;
 
     case WM_DESTROY:
+        // Cleanup
+        for (HBITMAP hBitmap : layers) {
+            DeleteObject(hBitmap);
+        }
         DestroyWindow(hWnd);
         break;
 
