@@ -14,3 +14,6 @@ BEGIN
     DEFPUSHBUTTON   "OK",IDOK,50,90,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,110,90,50,14
 END
+
+// Add import menu item
+#define IDM_FILE_IMPORT               102
