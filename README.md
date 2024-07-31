@@ -1,7 +1,7 @@
 # Nocturne
-This is just testing some code.
-Don't know what to do with it yet.
+This is just a test of some code.
+I don't know what to do with it yet.
 
-Everything needs rework.
+Everything needs to be reworked.
 
-Also need a course on it.
+I also need to take a course on it.
